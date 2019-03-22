@@ -42,11 +42,25 @@ import java.util.concurrent.TimeUnit;
 public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerChannel> {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(ServerBootstrap.class);
-
+    /**
+     * worker的可选项Map
+     */
     private final Map<ChannelOption<?>, Object> childOptions = new LinkedHashMap<ChannelOption<?>, Object>();
+    /**
+     * worker的属性Map
+     */
     private final Map<AttributeKey<?>, Object> childAttrs = new LinkedHashMap<AttributeKey<?>, Object>();
+    /**
+     * 启动类配置
+     */
     private final ServerBootstrapConfig config = new ServerBootstrapConfig(this);
+    /**
+     * worker的EventLoopGroup
+     */
     private volatile EventLoopGroup childGroup;
+    /**
+     * worker的处理器
+     */
     private volatile ChannelHandler childHandler;
 
     public ServerBootstrap() {
@@ -139,11 +153,12 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
 
     @Override
     void init(Channel channel) throws Exception {
+        // 获取bossChannel的可选项Map
         final Map<ChannelOption<?>, Object> options = options0();
         synchronized (options) {
             setChannelOptions(channel, options, logger);
         }
-
+        // 获取bossChannel的属性Map
         final Map<AttributeKey<?>, Object> attrs = attrs0();
         synchronized (attrs) {
             for (Entry<AttributeKey<?>, Object> e : attrs.entrySet()) {
@@ -241,26 +256,30 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
         @Override
         @SuppressWarnings("unchecked")
         public void channelRead(ChannelHandlerContext ctx, Object msg) {
+            // 接收到的客户端消息
             final Channel child = (Channel) msg;
-
+            // 添加worker的处理器
             child.pipeline().addLast(childHandler);
-
+            // 设置worker的可选项
             setChannelOptions(child, childOptions, logger);
-
+            // 设置worker的属性
             for (Entry<AttributeKey<?>, Object> e : childAttrs) {
                 child.attr((AttributeKey<Object>) e.getKey()).set(e.getValue());
             }
 
             try {
+                // 将worker的channel注册到workerEventLoop中
                 childGroup.register(child).addListener(new ChannelFutureListener() {
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {
+                        // 注册失败时强制关闭childChannel
                         if (!future.isSuccess()) {
                             forceClose(child, future.cause());
                         }
                     }
                 });
             } catch (Throwable t) {
+                // 发生异常时强制关闭childChannel
                 forceClose(child, t);
             }
         }
@@ -276,9 +295,11 @@ public class ServerBootstrap extends AbstractBootstrap<ServerBootstrap, ServerCh
             if (config.isAutoRead()) {
                 // stop accept new connections for 1 second to allow the channel to recover
                 // See https://github.com/netty/netty/issues/1328
+                // 关闭自动读取，并于1s后恢复
                 config.setAutoRead(false);
                 ctx.channel().eventLoop().schedule(enableAutoReadTask, 1, TimeUnit.SECONDS);
             }
+
             // still let the exceptionCaught event flow through the pipeline to give the user
             // a chance to do something with it
             ctx.fireExceptionCaught(cause);

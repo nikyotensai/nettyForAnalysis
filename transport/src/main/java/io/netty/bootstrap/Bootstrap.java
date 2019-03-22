@@ -263,12 +263,12 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
     void init(Channel channel) throws Exception {
         ChannelPipeline p = channel.pipeline();
         p.addLast(config.handler());
-
+        // 获取channel的可选项Map
         final Map<ChannelOption<?>, Object> options = options0();
         synchronized (options) {
             setChannelOptions(channel, options, logger);
         }
-
+        // 获取channel的属性Map
         final Map<AttributeKey<?>, Object> attrs = attrs0();
         synchronized (attrs) {
             for (Entry<AttributeKey<?>, Object> e : attrs.entrySet()) {

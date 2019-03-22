@@ -16,20 +16,11 @@
 
 package io.netty.bootstrap;
 
-import io.netty.channel.Channel;
-import io.netty.channel.ChannelFuture;
-import io.netty.channel.ChannelFutureListener;
-import io.netty.channel.ChannelHandler;
-import io.netty.channel.ChannelOption;
-import io.netty.channel.ChannelPromise;
-import io.netty.channel.DefaultChannelPromise;
-import io.netty.channel.EventLoop;
-import io.netty.channel.EventLoopGroup;
-import io.netty.channel.ReflectiveChannelFactory;
-import io.netty.util.internal.SocketUtils;
+import io.netty.channel.*;
 import io.netty.util.AttributeKey;
 import io.netty.util.concurrent.EventExecutor;
 import io.netty.util.concurrent.GlobalEventExecutor;
+import io.netty.util.internal.SocketUtils;
 import io.netty.util.internal.StringUtil;
 import io.netty.util.internal.logging.InternalLogger;
 
@@ -50,10 +41,19 @@ import java.util.Map;
 public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C extends Channel> implements Cloneable {
 
     volatile EventLoopGroup group;
+    /**
+     * channel工厂
+     */
     @SuppressWarnings("deprecation")
     private volatile ChannelFactory<? extends C> channelFactory;
     private volatile SocketAddress localAddress;
+    /**
+     * channel的可选项Map
+     */
     private final Map<ChannelOption<?>, Object> options = new LinkedHashMap<ChannelOption<?>, Object>();
+    /**
+     * channel的属性Map
+     */
     private final Map<AttributeKey<?>, Object> attrs = new LinkedHashMap<AttributeKey<?>, Object>();
     private volatile ChannelHandler handler;
 
@@ -279,20 +279,25 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     }
 
     private ChannelFuture doBind(final SocketAddress localAddress) {
+        // 初始化并注册一个channel，并将chanelFuture返回
         final ChannelFuture regFuture = initAndRegister();
+        // 得到实际的channel（初始化和注册的动作可能尚未完成）
         final Channel channel = regFuture.channel();
+        // 发生异常时，直接返回
         if (regFuture.cause() != null) {
             return regFuture;
         }
-
+        // 当到这chanel相关处理已经完成时
         if (regFuture.isDone()) {
             // At this point we know that the registration was complete and successful.
             ChannelPromise promise = channel.newPromise();
+            // 进行相关的绑定操作
             doBind0(regFuture, channel, localAddress, promise);
             return promise;
         } else {
             // Registration future is almost always fulfilled already, but just in case it's not.
             final PendingRegistrationPromise promise = new PendingRegistrationPromise(channel);
+            // 添加一个监听器
             regFuture.addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture future) throws Exception {
@@ -304,8 +309,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
                     } else {
                         // Registration was successful, so set the correct executor to use.
                         // See https://github.com/netty/netty/issues/2586
+                        // 修改注册状态为成功
                         promise.registered();
-
+                        // 进行相关的绑定操作
                         doBind0(regFuture, channel, localAddress, promise);
                     }
                 }
@@ -317,11 +323,14 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
     final ChannelFuture initAndRegister() {
         Channel channel = null;
         try {
+            // 生产各新channel
             channel = channelFactory.newChannel();
+            // 初始化channel
             init(channel);
         } catch (Throwable t) {
             if (channel != null) {
                 // channel can be null if newChannel crashed (eg SocketException("too many open files"))
+                // 注册失败时强制关闭
                 channel.unsafe().closeForcibly();
                 // as the Channel is not registered yet we need to force the usage of the GlobalEventExecutor
                 return new DefaultChannelPromise(channel, GlobalEventExecutor.INSTANCE).setFailure(t);
@@ -329,7 +338,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             // as the Channel is not registered yet we need to force the usage of the GlobalEventExecutor
             return new DefaultChannelPromise(new FailedChannel(), GlobalEventExecutor.INSTANCE).setFailure(t);
         }
-
+        // 注册channel
         ChannelFuture regFuture = config().group().register(channel);
         if (regFuture.cause() != null) {
             if (channel.isRegistered()) {
@@ -363,6 +372,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             @Override
             public void run() {
                 if (regFuture.isSuccess()) {
+                    // 绑定channel并添加监听器
                     channel.bind(localAddress, promise).addListener(ChannelFutureListener.CLOSE_ON_FAILURE);
                 } else {
                     promise.setFailure(regFuture.cause());
@@ -398,6 +408,14 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
      */
     public abstract AbstractBootstrapConfig<B, C> config();
 
+    /**
+     * 返回一个复制的Map（不可修改）
+     *
+     * @param map
+     * @param <K>
+     * @param <V>
+     * @return
+     */
     static <K, V> Map<K, V> copiedMap(Map<K, V> map) {
         final Map<K, V> copied;
         synchronized (map) {
