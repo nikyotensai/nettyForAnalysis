@@ -35,14 +35,17 @@ import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
  * the server.
  */
 public final class EchoClient {
-
+    // 获取是否使用ssl
     static final boolean SSL = System.getProperty("ssl") != null;
+    // 获取服配置的服务器地址(默认本地)
     static final String HOST = System.getProperty("host", "127.0.0.1");
+    // 获取端口（默认8007）
     static final int PORT = Integer.parseInt(System.getProperty("port", "8007"));
+    // 首次发送消息的大小
     static final int SIZE = Integer.parseInt(System.getProperty("size", "256"));
 
     public static void main(String[] args) throws Exception {
-        // Configure SSL.git
+        // 配置SSL
         final SslContext sslCtx;
         if (SSL) {
             sslCtx = SslContextBuilder.forClient()
@@ -50,13 +53,13 @@ public final class EchoClient {
         } else {
             sslCtx = null;
         }
-
-        // Configure the client.
+        // 配置客户端
         EventLoopGroup group = new NioEventLoopGroup();
         try {
             Bootstrap b = new Bootstrap();
             b.group(group)
                     .channel(NioSocketChannel.class)
+                    // 禁用Nagle算法
                     .option(ChannelOption.TCP_NODELAY, true)
                     .handler(new ChannelInitializer<SocketChannel>() {
                         @Override
@@ -69,14 +72,12 @@ public final class EchoClient {
                             p.addLast(new EchoClientHandler());
                         }
                     });
-
-            // Start the client.
+            // 启动客户端
             ChannelFuture f = b.connect(HOST, PORT).sync();
-
-            // Wait until the connection is closed.
+            //等待至连接断开
             f.channel().closeFuture().sync();
         } finally {
-            // Shut down the event loop to terminate all threads.
+            // 关闭客户端资源
             group.shutdownGracefully();
         }
     }

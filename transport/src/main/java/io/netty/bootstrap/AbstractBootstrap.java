@@ -289,13 +289,13 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
         }
         // 当到这chanel相关处理已经完成时
         if (regFuture.isDone()) {
-            // At this point we know that the registration was complete and successful.
+            // 到这可以确定channel已经注册成功
             ChannelPromise promise = channel.newPromise();
             // 进行相关的绑定操作
             doBind0(regFuture, channel, localAddress, promise);
             return promise;
         } else {
-            // Registration future is almost always fulfilled already, but just in case it's not.
+            // 注册一般到这就已经完成，到以防万一
             final PendingRegistrationPromise promise = new PendingRegistrationPromise(channel);
             // 添加一个监听器
             regFuture.addListener(new ChannelFutureListener() {
@@ -303,13 +303,9 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
                 public void operationComplete(ChannelFuture future) throws Exception {
                     Throwable cause = future.cause();
                     if (cause != null) {
-                        // Registration on the EventLoop failed so fail the ChannelPromise directly to not cause an
-                        // IllegalStateException once we try to access the EventLoop of the Channel.
                         promise.setFailure(cause);
                     } else {
-                        // Registration was successful, so set the correct executor to use.
-                        // See https://github.com/netty/netty/issues/2586
-                        // 修改注册状态为成功
+                        // 修改注册状态为成功（当注册成功时不在使用全局的executor，使用channel自己的，详见 https://github.com/netty/netty/issues/2586）
                         promise.registered();
                         // 进行相关的绑定操作
                         doBind0(regFuture, channel, localAddress, promise);
@@ -329,13 +325,11 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             init(channel);
         } catch (Throwable t) {
             if (channel != null) {
-                // channel can be null if newChannel crashed (eg SocketException("too many open files"))
                 // 注册失败时强制关闭
                 channel.unsafe().closeForcibly();
-                // as the Channel is not registered yet we need to force the usage of the GlobalEventExecutor
+                // 由于channel尚未注册好，强制使用GlobalEventExecutor
                 return new DefaultChannelPromise(channel, GlobalEventExecutor.INSTANCE).setFailure(t);
             }
-            // as the Channel is not registered yet we need to force the usage of the GlobalEventExecutor
             return new DefaultChannelPromise(new FailedChannel(), GlobalEventExecutor.INSTANCE).setFailure(t);
         }
         // 注册channel

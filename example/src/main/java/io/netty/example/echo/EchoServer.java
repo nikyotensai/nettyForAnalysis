@@ -34,12 +34,13 @@ import io.netty.handler.ssl.util.SelfSignedCertificate;
  * Echoes back any received data from a client.
  */
 public final class EchoServer {
-
+    // 获取是否使用ssl
     static final boolean SSL = System.getProperty("ssl") != null;
+    // 获取端口（默认8007）
     static final int PORT = Integer.parseInt(System.getProperty("port", "8007"));
 
     public static void main(String[] args) throws Exception {
-        // Configure SSL.
+        // 配置SSL
         final SslContext sslCtx;
         if (SSL) {
             SelfSignedCertificate ssc = new SelfSignedCertificate();
@@ -47,8 +48,7 @@ public final class EchoServer {
         } else {
             sslCtx = null;
         }
-
-        // Configure the server.
+        // 配置服务器
         EventLoopGroup bossGroup = new NioEventLoopGroup(1);
         EventLoopGroup workerGroup = new NioEventLoopGroup();
         try {
@@ -64,18 +64,16 @@ public final class EchoServer {
                             if (sslCtx != null) {
                                 p.addLast(sslCtx.newHandler(ch.alloc()));
                             }
-                            //p.addLast(new LoggingHandler(LogLevel.INFO));
+                            // 添加一个自定义的handler
                             p.addLast(new EchoServerHandler());
                         }
                     });
-
-            // Start the server.
+            // 启动服务器
             ChannelFuture f = b.bind(PORT).sync();
-
-            // Wait until the server socket is closed.
+            // 等待至连接断开
             f.channel().closeFuture().sync();
         } finally {
-            // Shut down all event loops to terminate all threads.
+            // 关闭服务器资源
             bossGroup.shutdownGracefully();
             workerGroup.shutdownGracefully();
         }

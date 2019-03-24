@@ -55,7 +55,13 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     private static final NotYetConnectedException FLUSH0_NOT_YET_CONNECTED_EXCEPTION = ThrowableUtil.unknownStackTrace(
             new NotYetConnectedException(), AbstractUnsafe.class, "flush0()");
 
+    /**
+     * 父channel
+     */
     private final Channel parent;
+    /**
+     * channel的Id
+     */
     private final ChannelId id;
     private final Unsafe unsafe;
     private final DefaultChannelPipeline pipeline;
@@ -63,9 +69,13 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
     private final CloseFuture closeFuture = new CloseFuture(this);
 
     private volatile SocketAddress localAddress;
+
     private volatile SocketAddress remoteAddress;
+
     private volatile EventLoop eventLoop;
+
     private volatile boolean registered;
+
     private boolean closeInitiated;
 
     /**
@@ -422,12 +432,12 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
      */
     protected abstract class AbstractUnsafe implements Unsafe {
 
+        /**
+         * 出站缓冲区
+         */
         private volatile ChannelOutboundBuffer outboundBuffer = new ChannelOutboundBuffer(AbstractChannel.this);
         private RecvByteBufAllocator.Handle recvHandle;
         private boolean inFlush0;
-        /**
-         * true if the channel has never been registered, false otherwise
-         */
         private boolean neverRegistered = true;
 
         private void assertEventLoop() {
@@ -459,6 +469,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         @Override
         public final void register(EventLoop eventLoop, final ChannelPromise promise) {
+			// 参数和状态校验
             if (eventLoop == null) {
                 throw new NullPointerException("eventLoop");
             }
@@ -473,7 +484,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
 
             AbstractChannel.this.eventLoop = eventLoop;
-
+			// 在当前线程直接注册
             if (eventLoop.inEventLoop()) {
                 register0(promise);
             } else {
@@ -502,8 +513,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 if (!promise.setUncancellable() || !ensureOpen(promise)) {
                     return;
                 }
+				
                 boolean firstRegistration = neverRegistered;
                 doRegister();
+
+                // 设置注册状态
                 neverRegistered = false;
                 registered = true;
 
@@ -512,6 +526,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 pipeline.invokeHandlerAddedIfNeeded();
 
                 safeSetSuccess(promise);
+                // 通知注册
                 pipeline.fireChannelRegistered();
                 // Only fire a channelActive if the channel has never been registered. This prevents firing
                 // multiple channel actives if the channel is deregistered and re-registered.
@@ -556,6 +571,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
             }
 
             boolean wasActive = isActive();
+
             try {
                 doBind(localAddress);
             } catch (Throwable t) {
@@ -564,6 +580,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
+            // 如果cChannel是刚激活的，通知Channel已激活
             if (!wasActive && isActive()) {
                 invokeLater(new Runnable() {
                     @Override
@@ -688,6 +705,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         private void close(final ChannelPromise promise, final Throwable cause,
                            final ClosedChannelException closeCause, final boolean notify) {
+            // 设置不可取消失败直接返回
             if (!promise.setUncancellable()) {
                 return;
             }
@@ -708,8 +726,9 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
+            // 标记开始关闭
             closeInitiated = true;
-
+            // 获取channel是否存活
             final boolean wasActive = isActive();
             final ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             this.outboundBuffer = null; // Disallow adding any messages and flushes to outboundBuffer.
@@ -722,6 +741,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                             // Execute the close.
                             doClose0(promise);
                         } finally {
+                            // �� EventLoop �У�ִ��
                             // Call invokeLater so closeAndDeregister is executed in the EventLoop again!
                             invokeLater(new Runnable() {
                                 @Override
@@ -731,6 +751,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                                         outboundBuffer.failFlushed(cause, notify);
                                         outboundBuffer.close(closeCause);
                                     }
+                                    // ִ触发inactive事件并取消注册
                                     fireChannelInactiveAndDeregister(wasActive);
                                 }
                             });
@@ -748,6 +769,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                         outboundBuffer.close(closeCause);
                     }
                 }
+                // flush中稍后执行，否则直接触发inactive事件并取消注册
                 if (inFlush0) {
                     invokeLater(new Runnable() {
                         @Override
@@ -795,10 +817,11 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
         }
 
         private void deregister(final ChannelPromise promise, final boolean fireChannelInactive) {
+            // 设置不可取消失败直接返回
             if (!promise.setUncancellable()) {
                 return;
             }
-
+            // 尚未注册直接返回成功
             if (!registered) {
                 safeSetSuccess(promise);
                 return;
@@ -817,21 +840,27 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 @Override
                 public void run() {
                     try {
+                        // 取消注册
                         doDeregister();
                     } catch (Throwable t) {
                         logger.warn("Unexpected exception occurred while deregistering a channel.", t);
                     } finally {
+                        // 触发inactive事件
                         if (fireChannelInactive) {
                             pipeline.fireChannelInactive();
                         }
+
                         // Some transports like local and AIO does not allow the deregistration of
                         // an open channel.  Their doDeregister() calls close(). Consequently,
                         // close() calls deregister() again - no need to fire channelUnregistered, so check
                         // if it was registered.
                         if (registered) {
+                            // 标记为未注册
                             registered = false;
+                            // 触发未注册事件
                             pipeline.fireChannelUnregistered();
                         }
+
                         safeSetSuccess(promise);
                     }
                 }
@@ -840,12 +869,15 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
 
         @Override
         public final void beginRead() {
+            // �ж��Ƿ��� EventLoop ���߳��С�
             assertEventLoop();
 
+            // Channel ���뼤��
             if (!isActive()) {
                 return;
             }
 
+            // ִ�п�ʼ��ȡ
             try {
                 doBeginRead();
             } catch (final Exception e) {
@@ -870,14 +902,16 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 // will be done in flush0()
                 // See https://github.com/netty/netty/issues/2362
                 safeSetFailure(promise, WRITE_CLOSED_CHANNEL_EXCEPTION);
-                // release message now to prevent resource-leak
+                // 立刻释放资源防止出现资源泄漏
                 ReferenceCountUtil.release(msg);
                 return;
             }
 
             int size;
             try {
+                // 过滤写入的消息
                 msg = filterOutboundMessage(msg);
+                // 计算消息的长度
                 size = pipeline.estimatorHandle().size(msg);
                 if (size < 0) {
                     size = 0;
@@ -888,6 +922,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
+            // 将消息写入到出站缓冲区
             outboundBuffer.addMessage(msg, size, promise);
         }
 
@@ -900,6 +935,7 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 return;
             }
 
+            // 标记内存队列开始 flush
             outboundBuffer.addFlush();
             flush0();
         }
@@ -910,12 +946,10 @@ public abstract class AbstractChannel extends DefaultAttributeMap implements Cha
                 // Avoid re-entrance
                 return;
             }
-
             final ChannelOutboundBuffer outboundBuffer = this.outboundBuffer;
             if (outboundBuffer == null || outboundBuffer.isEmpty()) {
                 return;
             }
-
             inFlush0 = true;
 
             // Mark all pending write requests as failure if the channel is inactive.
