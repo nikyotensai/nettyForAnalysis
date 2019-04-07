@@ -102,8 +102,7 @@ public class NioEventLoopGroup extends MultithreadEventLoopGroup {
     }
 
     /**
-     * Sets the percentage of the desired amount of time spent for I/O in the child event loops.  The default value is
-     * {@code 50}, which means the event loop will try to spend the same amount of time for I/O as for non-I/O tasks.
+     * 设置希望用于子EventLoop花费在处理IO上的用时占比。默认50
      */
     public void setIoRatio(int ioRatio) {
         for (EventExecutor e : this) {
