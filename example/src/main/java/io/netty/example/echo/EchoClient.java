@@ -24,6 +24,8 @@ import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory;
@@ -38,7 +40,7 @@ public final class EchoClient {
     // 获取是否使用ssl
     static final boolean SSL = System.getProperty("ssl") != null;
     // 获取服配置的服务器地址(默认本地)
-    static final String HOST = System.getProperty("host", "127.0.0.1");
+    static final String HOST = System.getProperty("host", "");
     // 获取端口（默认8007）
     static final int PORT = Integer.parseInt(System.getProperty("port", "8007"));
     // 首次发送消息的大小
@@ -68,7 +70,7 @@ public final class EchoClient {
                             if (sslCtx != null) {
                                 p.addLast(sslCtx.newHandler(ch.alloc(), HOST, PORT));
                             }
-                            //p.addLast(new LoggingHandler(LogLevel.INFO));
+                            p.addLast(new LoggingHandler(LogLevel.INFO));
                             p.addLast(new EchoClientHandler());
                         }
                     });
@@ -76,6 +78,8 @@ public final class EchoClient {
             ChannelFuture f = b.connect(HOST, PORT).sync();
             //等待至连接断开
             f.channel().closeFuture().sync();
+        } catch (Exception ex) {
+            ex.printStackTrace();
         } finally {
             // 关闭客户端资源
             group.shutdownGracefully();

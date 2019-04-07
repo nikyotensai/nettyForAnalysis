@@ -49,14 +49,21 @@ import java.util.Map.Entry;
 public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
 
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(Bootstrap.class);
-
+    /**
+     * 默认的地址解析器
+     */
     private static final AddressResolverGroup<?> DEFAULT_RESOLVER = DefaultAddressResolverGroup.INSTANCE;
 
     private final BootstrapConfig config = new BootstrapConfig(this);
-
+    /**
+     * 地址解析器
+     */
     @SuppressWarnings("unchecked")
     private volatile AddressResolverGroup<SocketAddress> resolver =
             (AddressResolverGroup<SocketAddress>) DEFAULT_RESOLVER;
+    /**
+     * 服务器地址
+     */
     private volatile SocketAddress remoteAddress;
 
     public Bootstrap() {
@@ -160,17 +167,22 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
      * @see #connect()
      */
     private ChannelFuture doResolveAndConnect(final SocketAddress remoteAddress, final SocketAddress localAddress) {
+        // 初始化并注册一个channel，并将chanelFuture返回
         final ChannelFuture regFuture = initAndRegister();
+        // 得到实际的channel（初始化和注册的动作可能尚未完成）
         final Channel channel = regFuture.channel();
-
+        // 当到这chanel相关处理已经完成时
         if (regFuture.isDone()) {
+            // 连接失败直接返回
             if (!regFuture.isSuccess()) {
                 return regFuture;
             }
+            // 解析服务器地址并完成连接动作
             return doResolveAndConnect0(channel, remoteAddress, localAddress, channel.newPromise());
         } else {
-            // Registration future is almost always fulfilled already, but just in case it's not.
+            // 注册一般到这就已经完成，这里以防万一
             final PendingRegistrationPromise promise = new PendingRegistrationPromise(channel);
+            // 添加一个监听器
             regFuture.addListener(new ChannelFutureListener() {
                 @Override
                 public void operationComplete(ChannelFuture future) throws Exception {
@@ -178,13 +190,11 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
                     // failure.
                     Throwable cause = future.cause();
                     if (cause != null) {
-                        // Registration on the EventLoop failed so fail the ChannelPromise directly to not cause an
-                        // IllegalStateException once we try to access the EventLoop of the Channel.
                         promise.setFailure(cause);
                     } else {
-                        // Registration was successful, so set the correct executor to use.
-                        // See https://github.com/netty/netty/issues/2586
+                        // 修改注册状态为成功（当注册成功时不在使用全局的executor，使用channel自己的，详见 https://github.com/netty/netty/issues/2586）
                         promise.registered();
+                        // 进行相关的绑定操作
                         doResolveAndConnect0(channel, remoteAddress, localAddress, promise);
                     }
                 }
@@ -198,37 +208,38 @@ public class Bootstrap extends AbstractBootstrap<Bootstrap, Channel> {
         try {
             final EventLoop eventLoop = channel.eventLoop();
             final AddressResolver<SocketAddress> resolver = this.resolver.getResolver(eventLoop);
-
+            // 解析器不知道怎么处理这个服务器地址或者已经处理过了
             if (!resolver.isSupported(remoteAddress) || resolver.isResolved(remoteAddress)) {
-                // Resolver has no idea about what to do with the specified remote address or it's resolved already.
                 doConnect(remoteAddress, localAddress, promise);
                 return promise;
             }
-
+            // 解析服务器地址
             final Future<SocketAddress> resolveFuture = resolver.resolve(remoteAddress);
-
+            // 解析完成时
             if (resolveFuture.isDone()) {
                 final Throwable resolveFailureCause = resolveFuture.cause();
 
                 if (resolveFailureCause != null) {
-                    // Failed to resolve immediately
+                    // 解析失败直接关闭channel
                     channel.close();
                     promise.setFailure(resolveFailureCause);
                 } else {
-                    // Succeeded to resolve immediately; cached? (or did a blocking lookup)
+                    // 解析成功开始连接
                     doConnect(resolveFuture.getNow(), localAddress, promise);
                 }
                 return promise;
             }
 
-            // Wait until the name resolution is finished.
+            // 解析没完成时等待解析完成
             resolveFuture.addListener(new FutureListener<SocketAddress>() {
                 @Override
                 public void operationComplete(Future<SocketAddress> future) throws Exception {
                     if (future.cause() != null) {
+                        // 解析失败直接关闭channel
                         channel.close();
                         promise.setFailure(future.cause());
                     } else {
+                        // 解析成功开始连接
                         doConnect(future.getNow(), localAddress, promise);
                     }
                 }

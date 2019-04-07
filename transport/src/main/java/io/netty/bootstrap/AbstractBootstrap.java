@@ -295,7 +295,7 @@ public abstract class AbstractBootstrap<B extends AbstractBootstrap<B, C>, C ext
             doBind0(regFuture, channel, localAddress, promise);
             return promise;
         } else {
-            // 注册一般到这就已经完成，到以防万一
+            // 注册一般到这就已经完成，这里以防万一
             final PendingRegistrationPromise promise = new PendingRegistrationPromise(channel);
             // 添加一个监听器
             regFuture.addListener(new ChannelFutureListener() {
