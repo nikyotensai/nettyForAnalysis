@@ -56,7 +56,7 @@ public final class EchoClient {
             sslCtx = null;
         }
         // 配置客户端
-        EventLoopGroup group = new NioEventLoopGroup();
+        EventLoopGroup group = new NioEventLoopGroup(1);
         try {
             Bootstrap b = new Bootstrap();
             b.group(group)
