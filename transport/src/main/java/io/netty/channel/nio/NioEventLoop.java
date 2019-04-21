@@ -540,9 +540,12 @@ public final class NioEventLoop extends SingleThreadEventLoop {
     }
 
     private void processSelectedKeys() {
+        // 如果Selector优化过，则处理优化过的
         if (selectedKeys != null) {
             processSelectedKeysOptimized();
-        } else {
+        }
+        // 处理原生的
+        else {
             processSelectedKeysPlain(selector.selectedKeys());
         }
     }
@@ -614,6 +617,9 @@ public final class NioEventLoop extends SingleThreadEventLoop {
         }
     }
 
+    /**
+     * 处理优化了的SelectedSelectionKeySet
+     */
     private void processSelectedKeysOptimized() {
         for (int i = 0; i < selectedKeys.size; ++i) {
             final SelectionKey k = selectedKeys.keys[i];
