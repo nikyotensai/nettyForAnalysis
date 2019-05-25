@@ -41,20 +41,22 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
     private static final InternalLogger logger = InternalLoggerFactory.getInstance(AbstractChannelHandlerContext.class);
     volatile AbstractChannelHandlerContext next;
     volatile AbstractChannelHandlerContext prev;
-
+    /**
+     * {@link #handlerState} 的原子更新器
+     */
     private static final AtomicIntegerFieldUpdater<AbstractChannelHandlerContext> HANDLER_STATE_UPDATER =
             AtomicIntegerFieldUpdater.newUpdater(AbstractChannelHandlerContext.class, "handlerState");
 
     /**
-     * {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} is about to be called.
+     * {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} 将被调用
      */
     private static final int ADD_PENDING = 1;
     /**
-     * {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} was called.
+     * {@link ChannelHandler#handlerAdded(ChannelHandlerContext)} 已被调用
      */
     private static final int ADD_COMPLETE = 2;
     /**
-     * {@link ChannelHandler#handlerRemoved(ChannelHandlerContext)} was called.
+     * {@link ChannelHandler#handlerRemoved(ChannelHandlerContext)} 已被调用
      */
     private static final int REMOVE_COMPLETE = 3;
     /**
@@ -76,11 +78,25 @@ abstract class AbstractChannelHandlerContext extends DefaultAttributeMap
 
     // Lazily instantiated tasks used to trigger events to a handler with different executor.
     // There is no need to make this volatile as at worse it will just create a few more instances then needed.
+    /**
+     * 执行 Channel ReadComplete 事件的任务
+     */
     private Runnable invokeChannelReadCompleteTask;
+    /**
+     * 执行 Channel Read 事件的任务
+     */
     private Runnable invokeReadTask;
+    /**
+     * 执行 Channel WritableStateChanged 事件的任务
+     */
     private Runnable invokeChannelWritableStateChangedTask;
+    /**
+     *执行 flush 事件的任务
+     */
     private Runnable invokeFlushTask;
-
+    /**
+     * 处理器状态
+     */
     private volatile int handlerState = INIT;
 
     AbstractChannelHandlerContext(DefaultChannelPipeline pipeline, EventExecutor executor, String name,

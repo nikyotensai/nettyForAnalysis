@@ -50,14 +50,21 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     private static final String HEAD_NAME = generateName0(HeadContext.class);
     private static final String TAIL_NAME = generateName0(TailContext.class);
 
-    private static final FastThreadLocal<Map<Class<?>, String>> nameCaches =
-            new FastThreadLocal<Map<Class<?>, String>>() {
-                @Override
-                protected Map<Class<?>, String> initialValue() throws Exception {
-                    return new WeakHashMap<Class<?>, String>();
-                }
-            };
+    /**
+     * {@link AbstractChannelHandlerContext}名字的缓存
+     */
+    private static final FastThreadLocal<Map<Class<?>, String>> nameCaches = new FastThreadLocal<Map<Class<?>, String>>() {
 
+        @Override
+        protected Map<Class<?>, String> initialValue() throws Exception {
+            return new WeakHashMap<Class<?>, String>();
+        }
+
+    };
+
+    /**
+     * {@link #estimatorHandle} 的原子更新器
+     */
     private static final AtomicReferenceFieldUpdater<DefaultChannelPipeline, MessageSizeEstimator.Handle> ESTIMATOR =
             AtomicReferenceFieldUpdater.newUpdater(
                     DefaultChannelPipeline.class, MessageSizeEstimator.Handle.class, "estimatorHandle");
@@ -67,9 +74,15 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     private final Channel channel;
     private final ChannelFuture succeededFuture;
     private final VoidChannelPromise voidPromise;
+    /**
+     * 是否检测内存泄漏
+     */
     private final boolean touch = ResourceLeakDetector.isEnabled();
 
     private Map<EventExecutorGroup, EventExecutor> childExecutors;
+    /**
+     * 估计消息大小的处理器
+     */
     private volatile MessageSizeEstimator.Handle estimatorHandle;
     private boolean firstRegistration = true;
 
@@ -157,18 +170,23 @@ public class DefaultChannelPipeline implements ChannelPipeline {
     public final ChannelPipeline addFirst(EventExecutorGroup group, String name, ChannelHandler handler) {
         final AbstractChannelHandlerContext newCtx;
         synchronized (this) {
+            // 检查handler是否可以共享
             checkMultiplicity(handler);
+            // 给AbstractChannelHandlerContext起个独立的名字
             name = filterName(name, handler);
-
+            // 创建DefaultChannelHandlerContext
             newCtx = newContext(group, name, handler);
-
+            // 执行实际的添加操作
             addFirst0(newCtx);
 
             // If the registered is false it means that the channel was not registered on an eventloop yet.
             // In this case we add the context to the pipeline and add a task that will call
             // ChannelHandler.handlerAdded(...) once the channel is registered.
+            // channel尚未注册到eventloop
             if (!registered) {
+                // 设置newCtx的状态为ADD_PENDING
                 newCtx.setAddPending();
+                // 设置过一会回调ChannelHandler的handlerAdded方法
                 callHandlerCallbackLater(newCtx, true);
                 return this;
             }
@@ -598,6 +616,10 @@ public class DefaultChannelPipeline implements ChannelPipeline {
         oldCtx.next = newCtx;
     }
 
+    /**
+     * 检查handler是否可以共享
+     * @param handler
+     */
     private static void checkMultiplicity(ChannelHandler handler) {
         if (handler instanceof ChannelHandlerAdapter) {
             ChannelHandlerAdapter h = (ChannelHandlerAdapter) handler;
